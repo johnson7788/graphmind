@@ -1,0 +1,23 @@
+[project]
+name = "graphrag-demo"
+version = "1.0.0"
+description = "GraphRAG Demo: upload files, build knowledge graph, visualize and query"
+requires-python = ">=3.11,<3.14"
+
+dependencies = [
+    "streamlit>=1.40.0",
+    "graphrag>=2.0.0",
+    "pyvis>=0.3.0",
+    "pandas>=2.0.0",
+    "pyarrow>=14.0.0",
+    "pyyaml>=6.0",
+    "python-docx>=1.0",
+    "PyPDF2>=3.0",
+]
+
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

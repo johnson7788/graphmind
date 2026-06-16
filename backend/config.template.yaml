@@ -1,0 +1,12 @@
+# GraphMind — LLM 配置
+# 将此文件复制为 config.local.yaml 并填入你的 API Key
+# config.local.yaml 已在 .gitignore 中排除，不会被提交
+
+llm:
+  api_key: "sk-your-api-key-here"            # 必填：LLM API 密钥，请复制到 config.local.yaml 后填写
+  model: "qwen-plus"                        # Chat 模型名称
+  api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # API 端点
+
+embedding:
+  model: "text-embedding-v3"        # Embedding 模型名称
+  api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # Embedding API 端点（通常与 llm.api_base 相同）

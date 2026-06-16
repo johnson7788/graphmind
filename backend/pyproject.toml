@@ -1,0 +1,31 @@
+[project]
+name = "graphrag-backend"
+version = "1.0.0"
+description = "GraphRAG Demo Backend - FastAPI server"
+requires-python = ">=3.11,<3.14"
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "sse-starlette>=2.0",
+    "graphrag>=2.0.0",
+    "pandas>=2.0.0",
+    "pyarrow>=14.0.0",
+    "pyyaml>=6.0",
+    "python-docx>=1.0",
+    "PyPDF2>=3.0",
+]
+
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "requests>=2.34.2",
+]
