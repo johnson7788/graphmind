@@ -11,14 +11,13 @@ import {
   Typography,
   Space,
   Descriptions,
-  List,
   Divider,
   AutoComplete,
   Input,
+  Image,
 } from 'antd';
 import {
   ReloadOutlined,
-  AimOutlined,
   NodeIndexOutlined,
   ApartmentOutlined,
   ClusterOutlined,
@@ -27,10 +26,17 @@ import {
   ArrowLeftOutlined,
   LinkOutlined,
 } from '@ant-design/icons';
-import { Network } from 'vis-network';
-import type { Options } from 'vis-network';
-import { DataSet } from 'vis-data';
-import { getGraphData, getGraphStats, searchEntities, getEntityNeighborhood } from '../services/api';
+import Graph from 'graphology';
+import Sigma from 'sigma';
+import { NodeImageProgram } from '@sigma/node-image';
+import forceAtlas2 from 'graphology-layout-forceatlas2';
+import {
+  getGraphData,
+  getGraphStats,
+  searchEntities,
+  getEntityNeighborhood,
+  graphImageUrl,
+} from '../services/api';
 import { useDatasetStore } from '../stores/datasetStore';
 
 const { Sider, Content } = Layout;
@@ -47,6 +53,7 @@ interface GraphNode {
   description: string;
   color: string;
   size: number;
+  image: string | null;
 }
 
 interface GraphEdge {
@@ -54,7 +61,6 @@ interface GraphEdge {
   to: string;
   label: string;
   weight: number;
-  id?: string;
 }
 
 interface GraphDataResponse {
@@ -65,7 +71,6 @@ interface GraphDataResponse {
 interface GraphStatsResponse {
   entity_count: number;
   relationship_count: number;
-  community_count: number;
   entity_types: Record<string, number>;
 }
 
@@ -75,10 +80,10 @@ interface SelectedNodeInfo {
   type: string;
   description: string;
   color: string;
+  image: string | null;
 }
 
 interface SelectedEdgeInfo {
-  id: string;
   from: string;
   to: string;
   label: string;
@@ -92,9 +97,9 @@ interface SelectedEdgeInfo {
 // ---------------------------------------------------------------------------
 
 export default function GraphView() {
-  // Refs for vis-network
+  // Refs for sigma.js
   const containerRef = useRef<HTMLDivElement>(null);
-  const networkRef = useRef<Network | null>(null);
+  const sigmaRef = useRef<Sigma | null>(null);
 
   // Data state
   const [graphData, setGraphData] = useState<GraphDataResponse | null>(null);
@@ -237,6 +242,7 @@ export default function GraphView() {
     setExploringEntity(entityName);
     setSearchQuery(entityName);
     setSearchOptions([]);
+    setDrawerOpen(false);
   };
 
   const handleBackToFullGraph = () => {
@@ -254,7 +260,7 @@ export default function GraphView() {
     let cancelled = false;
     setGraphLoading(true);
 
-    getEntityNeighborhood(selectedId, exploringEntity, 1)
+    getEntityNeighborhood(selectedId, exploringEntity, 2)
       .then((data: GraphDataResponse) => {
         if (!cancelled) setGraphData(data);
       })
@@ -271,144 +277,141 @@ export default function GraphView() {
   }, [exploringEntity, selectedId]);
 
   // ---------------------------------------------------------------------------
-  // Initialize / update vis-network whenever graphData changes
+  // Initialize / update sigma.js whenever graphData changes
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
     if (!containerRef.current || !graphData) return;
 
     // Tear down previous instance
-    networkRef.current?.destroy();
-    networkRef.current = null;
+    sigmaRef.current?.kill();
+    sigmaRef.current = null;
 
     if (graphData.nodes.length === 0) return;
 
-    // vis-data/vis-network have strict generic types; use 'any' casts
-    // to satisfy the compiler while providing correct runtime data.
-    const nodes = new DataSet(
-      graphData.nodes.map((n) => {
-        const isRoot = exploringEntity && n.id === exploringEntity;
-        return {
+    const graph = new Graph({ multi: true });
+
+    graphData.nodes.forEach((n) => {
+      const isRoot = exploringEntity != null && n.id === exploringEntity;
+      const isImage = n.type.toLowerCase() === 'image' && !!n.image;
+      graph.addNode(n.id, {
+        label: n.label,
+        // Random initial placement; forceAtlas2 spreads them out.
+        x: Math.random(),
+        y: Math.random(),
+        size: isRoot ? Math.min(n.size * 1.4, 60) : n.size,
+        color: isRoot ? '#ff6b00' : n.color,
+        type: isImage ? 'image' : 'circle',
+        image: isImage && n.image ? graphImageUrl(selectedId!, n.image) : undefined,
+      });
+    });
+
+    graphData.edges.forEach((e, idx) => {
+      if (!graph.hasNode(e.from) || !graph.hasNode(e.to)) return;
+      graph.addEdgeWithKey(`e-${idx}`, e.from, e.to, {
+        size: Math.max(1, e.weight / 3),
+        color: '#555566',
+        type: 'arrow',
+      });
+    });
+
+    // Force-directed layout for a readable spread.
+    forceAtlas2.assign(graph, {
+      iterations: graph.order > 400 ? 120 : 200,
+      settings: {
+        ...forceAtlas2.inferSettings(graph),
+        gravity: 0.5,
+        scalingRatio: 12,
+        slowDown: 2,
+      },
+    });
+
+    const sigma = new Sigma(graph, containerRef.current, {
+      nodeProgramClasses: { image: NodeImageProgram },
+      renderEdgeLabels: false,
+      labelColor: { color: '#e0e0e0' },
+      labelSize: 13,
+      labelDensity: 0.4,
+      labelGridCellSize: 80,
+      defaultEdgeColor: '#555566',
+      minCameraRatio: 0.1,
+      maxCameraRatio: 10,
+    });
+    sigmaRef.current = sigma;
+
+    // Hover highlighting: emphasize hovered node's neighborhood.
+    let hoveredNode: string | null = null;
+    sigma.setSetting('nodeReducer', (node, data) => {
+      if (hoveredNode && node !== hoveredNode && !graph.areNeighbors(hoveredNode, node)) {
+        return { ...data, color: '#2a2a3e', label: '' };
+      }
+      return data;
+    });
+    sigma.setSetting('edgeReducer', (edge, data) => {
+      if (hoveredNode && !graph.extremities(edge).includes(hoveredNode)) {
+        return { ...data, hidden: true };
+      }
+      return data;
+    });
+
+    sigma.on('enterNode', ({ node }) => {
+      hoveredNode = node;
+      sigma.refresh();
+    });
+    sigma.on('leaveNode', () => {
+      hoveredNode = null;
+      sigma.refresh();
+    });
+
+    // Single click → open detail drawer.
+    sigma.on('clickNode', ({ node }) => {
+      const n = graphData.nodes.find((x) => x.id === node);
+      if (n) {
+        setSelectedNode({
           id: n.id,
           label: n.label,
-          title: `${n.type}\n${n.description}`,
-          color: isRoot
-            ? { background: '#ff6b00', border: '#ff4500', highlight: { background: '#ff8c00', border: '#ff4500' } }
-            : { background: n.color, border: n.color },
-          size: isRoot ? n.size * 1.5 : n.size,
-          shape: isRoot ? 'star' : 'dot',
-          font: isRoot ? { color: '#ffffff', size: 16, bold: true } : undefined,
-          borderWidth: isRoot ? 4 : 2,
-        };
-      }) as any,
-    );
-
-    const edges = new DataSet(
-      graphData.edges.map((e, idx) => ({
-        id: `edge-${e.from}-${e.to}-${idx}`,
-        from: e.from,
-        to: e.to,
-        label: '',
-        weight: e.weight,
-        title: e.label || '点击查看详情',
-        color: { color: '#555555' },
-        width: Math.max(1, e.weight / 3),
-      })) as any,
-    );
-
-    const options: Options = {
-      height: '650px',
-      physics: {
-        forceAtlas2Based: {
-          gravitationalConstant: -50,
-          centralGravity: 0.01,
-          springLength: 150,
-          springConstant: 0.08,
-          damping: 0.4,
-        },
-        maxVelocity: 50,
-        solver: 'forceAtlas2Based',
-        timestep: 0.35,
-        stabilization: { iterations: 150 },
-      },
-      interaction: {
-        hover: true,
-        navigationButtons: true,
-        zoomView: true,
-        dragView: true,
-      },
-      nodes: {
-        shape: 'dot',
-        font: { color: '#e0e0e0', size: 14 },
-        borderWidth: 2,
-      },
-      edges: {
-        smooth: { enabled: true, type: 'continuous', roundness: 0.5 },
-        hoverWidth: 3,
-        selectionWidth: 4,
-      },
-    };
-
-    networkRef.current = new Network(
-      containerRef.current,
-      { nodes, edges } as any,
-      options,
-    );
-
-    // Click handler — open drawer with node or edge detail
-    networkRef.current.on('click', (params) => {
-      // Check if edge was clicked
-      if (params.edges.length > 0) {
-        const edgeId = params.edges[0];
-        const edgeIndex = graphData.edges.findIndex((_, idx) =>
-          `edge-${graphData.edges[idx].from}-${graphData.edges[idx].to}-${idx}` === edgeId
-        );
-
-        if (edgeIndex !== -1) {
-          const edge = graphData.edges[edgeIndex];
-          const fromNode = graphData.nodes.find(n => n.id === edge.from);
-          const toNode = graphData.nodes.find(n => n.id === edge.to);
-
-          setSelectedEdge({
-            id: edgeId,
-            from: edge.from,
-            to: edge.to,
-            label: edge.label,
-            weight: edge.weight,
-            fromNode,
-            toNode,
-          });
-          setSelectedNode(null);
-          setDrawerType('edge');
-          setDrawerOpen(true);
-          return;
-        }
-      }
-
-      // Check if node was clicked
-      if (params.nodes.length > 0) {
-        const nodeId = params.nodes[0];
-        const node = graphData.nodes.find((n) => n.id === nodeId);
-        if (node) {
-          setSelectedNode({
-            id: node.id,
-            label: node.label,
-            type: node.type,
-            description: node.description,
-            color: node.color,
-          });
-          setSelectedEdge(null);
-          setDrawerType('node');
-          setDrawerOpen(true);
-        }
+          type: n.type,
+          description: n.description,
+          color: n.color,
+          image: n.image,
+        });
+        setSelectedEdge(null);
+        setDrawerType('node');
+        setDrawerOpen(true);
       }
     });
 
+    // Double click → explore that node's neighborhood.
+    sigma.on('doubleClickNode', ({ node, preventSigmaDefault }) => {
+      preventSigmaDefault();
+      handleExploreEntity(node);
+    });
+
+    sigma.on('clickEdge', ({ edge }) => {
+      const idx = Number(edge.replace('e-', ''));
+      const e = graphData.edges[idx];
+      if (!e) return;
+      const fromNode = graphData.nodes.find((n) => n.id === e.from);
+      const toNode = graphData.nodes.find((n) => n.id === e.to);
+      setSelectedEdge({
+        from: e.from,
+        to: e.to,
+        label: e.label,
+        weight: e.weight,
+        fromNode,
+        toNode,
+      });
+      setSelectedNode(null);
+      setDrawerType('edge');
+      setDrawerOpen(true);
+    });
+
     return () => {
-      networkRef.current?.destroy();
-      networkRef.current = null;
+      sigmaRef.current?.kill();
+      sigmaRef.current = null;
     };
-  }, [graphData, exploringEntity]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graphData, exploringEntity, selectedId]);
 
   // ---------------------------------------------------------------------------
   // Type filter options derived from stats
@@ -468,7 +471,7 @@ export default function GraphView() {
             }}
           >
             <InfoCircleOutlined style={{ marginRight: 4 }} />
-            提示：悬停连线查看关系描述，点击连线查看详情
+            提示：单击查看详情，双击节点展开其邻域关系
           </div>
 
           {/* Dataset selector */}
@@ -554,7 +557,7 @@ export default function GraphView() {
                       onClose={handleBackToFullGraph}
                       style={{ fontSize: 13, padding: '4px 8px' }}
                     >
-                      探索: {exploringEntity} (1层关系)
+                      探索: {exploringEntity} (2层关系)
                     </Tag>
                     <Button
                       type="link"
@@ -590,9 +593,9 @@ export default function GraphView() {
                 icon={<ReloadOutlined />}
                 onClick={() => {
                   if (exploringEntity) {
-                    // Re-explore the same entity
+                    const entity = exploringEntity;
                     setExploringEntity(null);
-                    setTimeout(() => setExploringEntity(searchQuery), 50);
+                    setTimeout(() => setExploringEntity(entity), 50);
                   } else {
                     setSelectedTypes([...selectedTypes]);
                   }
@@ -637,18 +640,6 @@ export default function GraphView() {
                     >
                       <Text>关系总数</Text>
                       <Text strong>{stats.relationship_count}</Text>
-                    </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        padding: '4px 8px',
-                        background: '#fafafa',
-                        borderRadius: 4,
-                      }}
-                    >
-                      <Text>社区总数</Text>
-                      <Text strong>{stats.community_count}</Text>
                     </div>
                   </Space>
 
@@ -717,8 +708,7 @@ export default function GraphView() {
                 ref={containerRef}
                 style={{
                   width: '100%',
-                  height: '100%',
-                  minHeight: 650,
+                  height: 'calc(100vh - 64px)',
                   background: '#1a1a2e',
                 }}
               />
@@ -742,7 +732,6 @@ export default function GraphView() {
         {/* Edge detail */}
         {drawerType === 'edge' && selectedEdge && (
           <div>
-            {/* Relationship info */}
             <div style={{ marginBottom: 16 }}>
               <div
                 style={{
@@ -798,56 +787,21 @@ export default function GraphView() {
                 </Descriptions.Item>
               </Descriptions>
             </div>
-
-            <Divider />
-
-            {/* Entity details */}
-            <Title level={5}>
-              <InfoCircleOutlined style={{ marginRight: 6 }} />
-              关联实体详情
-            </Title>
-
-            {selectedEdge.fromNode && (
-              <div style={{ marginBottom: 16 }}>
-                <Text strong style={{ display: 'block', marginBottom: 6 }}>
-                  起始实体: {selectedEdge.fromNode.label}
-                </Text>
-                <Descriptions size="small" column={1} bordered>
-                  <Descriptions.Item label="类型">
-                    <Tag color={selectedEdge.fromNode.color}>{selectedEdge.fromNode.type}</Tag>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="描述">
-                    <Text type="secondary" ellipsis={{ rows: 2, expandable: true, symbol: '展开' }}>
-                      {selectedEdge.fromNode.description || '暂无描述'}
-                    </Text>
-                  </Descriptions.Item>
-                </Descriptions>
-              </div>
-            )}
-
-            {selectedEdge.toNode && (
-              <div>
-                <Text strong style={{ display: 'block', marginBottom: 6 }}>
-                  目标实体: {selectedEdge.toNode.label}
-                </Text>
-                <Descriptions size="small" column={1} bordered>
-                  <Descriptions.Item label="类型">
-                    <Tag color={selectedEdge.toNode.color}>{selectedEdge.toNode.type}</Tag>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="描述">
-                    <Text type="secondary" ellipsis={{ rows: 2, expandable: true, symbol: '展开' }}>
-                      {selectedEdge.toNode.description || '暂无描述'}
-                    </Text>
-                  </Descriptions.Item>
-                </Descriptions>
-              </div>
-            )}
           </div>
         )}
 
         {/* Node detail */}
         {drawerType === 'node' && selectedNode && (
           <div>
+            {selectedNode.image && (
+              <div style={{ marginBottom: 16, textAlign: 'center' }}>
+                <Image
+                  src={graphImageUrl(selectedId!, selectedNode.image)}
+                  alt={selectedNode.label}
+                  style={{ maxHeight: 240, borderRadius: 6 }}
+                />
+              </div>
+            )}
             <Descriptions column={1} bordered size="small">
               <Descriptions.Item label="实体名称">
                 <Text strong>{selectedNode.label}</Text>
@@ -866,6 +820,15 @@ export default function GraphView() {
                 </Paragraph>
               </Descriptions.Item>
             </Descriptions>
+            <Button
+              type="primary"
+              icon={<NodeIndexOutlined />}
+              block
+              style={{ marginTop: 16 }}
+              onClick={() => handleExploreEntity(selectedNode.id)}
+            >
+              展开此节点的关系
+            </Button>
           </div>
         )}
       </Drawer>

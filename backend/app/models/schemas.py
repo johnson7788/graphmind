@@ -19,7 +19,6 @@ class DatasetInfo(BaseModel):
     index_complete: bool = False
     entity_count: int = 0
     relationship_count: int = 0
-    community_count: int = 0
 
 
 class DatasetListResponse(BaseModel):
@@ -93,6 +92,7 @@ class GraphNode(BaseModel):
     description: str
     color: str
     size: float
+    image: str | None = None  # dataset-relative path to a thumbnail (image nodes)
 
 
 class GraphEdge(BaseModel):
@@ -112,7 +112,6 @@ class GraphData(BaseModel):
 class GraphStats(BaseModel):
     entity_count: int
     relationship_count: int
-    community_count: int
     entity_types: dict[str, int]
 
 
@@ -129,7 +128,10 @@ class PaginatedResponse(BaseModel):
 
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1)
-    mode: str = Field(default="local", pattern="^(local|global|basic)$")
+    # LightRAG query modes; "basic" is accepted as an alias for "naive".
+    mode: str = Field(default="mix", pattern="^(naive|local|global|hybrid|mix|basic)$")
+    # Optional multimodal content (images/tables/equations) for VLM-enhanced Q&A.
+    multimodal_content: list[dict] | None = None
 
 
 class SearchResponse(BaseModel):

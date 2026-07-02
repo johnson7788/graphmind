@@ -12,18 +12,17 @@ router = APIRouter()
 
 
 @router.post("/{dataset_id}/search", response_model=SearchResponse)
-def search(dataset_id: str, body: SearchRequest):
+async def search(dataset_id: str, body: SearchRequest):
     """Run a knowledge-graph search query (non-streaming).
 
-    Modes:
-    - local:  Uses entity neighbourhood for focused answers
-    - global: Uses community summaries for broad questions
-    - basic:  Simple RAG over text chunks
+    Modes (LightRAG): naive | local | global | hybrid | mix.
+    "basic" is accepted as an alias for "naive".
     """
-    return search_service.search(
+    return await search_service.search(
         dataset_id=dataset_id,
         query=body.query,
         mode=body.mode,
+        multimodal_content=body.multimodal_content,
     )
 
 
@@ -42,6 +41,7 @@ async def search_stream(dataset_id: str, body: SearchRequest):
             dataset_id=dataset_id,
             query=body.query,
             mode=body.mode,
+            multimodal_content=body.multimodal_content,
         ),
         media_type="text/event-stream",
         headers={

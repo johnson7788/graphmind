@@ -11,15 +11,18 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.5",
+    "@sigma/node-image": "^3.0.0",
     "antd": "^6.4.4",
     "axios": "^1.17.0",
+    "graphology": "^0.26.0",
+    "graphology-layout-forceatlas2": "^0.10.1",
+    "graphology-types": "^0.24.8",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.17.0",
     "remark-gfm": "^4.0.1",
-    "vis-data": "^8.0.4",
-    "vis-network": "^10.1.0",
+    "sigma": "^3.0.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

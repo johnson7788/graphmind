@@ -25,6 +25,8 @@ import {
   BulbOutlined,
   LoadingOutlined,
   StopOutlined,
+  DeploymentUnitOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -35,9 +37,11 @@ import { searchKnowledgeStream } from '../services/api';
 const { Title, Text, Paragraph } = Typography;
 
 const modeConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  mix: { label: '混合检索', color: 'purple', icon: <DeploymentUnitOutlined /> },
   local: { label: '本地搜索', color: 'blue', icon: <FileSearchOutlined /> },
   global: { label: '全局搜索', color: 'green', icon: <GlobalOutlined /> },
-  basic: { label: '基础 RAG', color: 'orange', icon: <BulbOutlined /> },
+  hybrid: { label: '混合模式', color: 'cyan', icon: <ThunderboltOutlined /> },
+  naive: { label: '基础 RAG', color: 'orange', icon: <BulbOutlined /> },
 };
 
 export default function SearchQA() {
@@ -53,7 +57,7 @@ export default function SearchQA() {
     clearHistory,
   } = useSearchStore();
 
-  const [mode, setMode] = useState<string>('local');
+  const [mode, setMode] = useState<string>('mix');
   const [queryValue, setQueryValue] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const abortRef = useRef<AbortController | null>(null);
@@ -203,7 +207,7 @@ export default function SearchQA() {
         />
         {selectedDataset && (
           <Text type="secondary" style={{ marginLeft: 12 }}>
-            实体: {selectedDataset.entity_count} | 关系: {selectedDataset.relationship_count} | 社区: {selectedDataset.community_count}
+            实体: {selectedDataset.entity_count} | 关系: {selectedDataset.relationship_count}
           </Text>
         )}
       </div>

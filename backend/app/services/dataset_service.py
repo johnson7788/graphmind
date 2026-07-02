@@ -7,7 +7,6 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-import pandas as pd
 import yaml
 
 from app.config import DATA_ROOT
@@ -15,17 +14,22 @@ from app.models.schemas import DatasetInfo
 
 log = logging.getLogger("graphrag-backend")
 
+# LightRAG's knowledge-graph file lives under <dataset>/rag_storage/.
+_GRAPHML_NAME = "graph_chunk_entity_relation.graphml"
 
-def _read_parquet_count(path: Path) -> int:
-    """Return row count of a parquet file, or 0 on any error."""
-    if not path.exists():
-        return 0
+
+def _graph_counts(rag_storage: Path) -> tuple[int, int]:
+    """Return (node_count, edge_count) from the LightRAG GraphML, or (0, 0)."""
+    graphml = rag_storage / _GRAPHML_NAME
+    if not graphml.exists():
+        return 0, 0
     try:
-        import pyarrow.parquet as pq
-        meta = pq.read_metadata(path)
-        return meta.num_rows
-    except Exception:
-        return 0
+        import networkx as nx
+        g = nx.read_graphml(graphml)
+        return g.number_of_nodes(), g.number_of_edges()
+    except Exception as e:
+        log.warning("Failed to read graph for %s: %s", rag_storage, e)
+        return 0, 0
 
 
 def _dataset_info_from_dir(d: Path) -> DatasetInfo:
@@ -44,22 +48,11 @@ def _dataset_info_from_dir(d: Path) -> DatasetInfo:
         except Exception:
             pass
 
-    output_dir = d / "output"
-    entities_file = output_dir / "entities.parquet"
-    has_index = entities_file.exists()
-
-    # Index is complete only if all critical tables exist
-    _CRITICAL_TABLES = ["entities.parquet", "relationships.parquet",
-                        "communities.parquet", "community_reports.parquet",
-                        "text_units.parquet"]
-    index_complete = has_index and all(
-        (output_dir / t).exists() for t in _CRITICAL_TABLES
-    )
-
-    # Count rows
-    entity_count = _read_parquet_count(output_dir / "entities.parquet")
-    relationship_count = _read_parquet_count(output_dir / "relationships.parquet")
-    community_count = _read_parquet_count(output_dir / "communities.parquet")
+    rag_storage = d / "rag_storage"
+    graphml = rag_storage / _GRAPHML_NAME
+    has_index = graphml.exists()
+    entity_count, relationship_count = _graph_counts(rag_storage)
+    index_complete = has_index and entity_count > 0
 
     return DatasetInfo(
         id=dataset_id,
@@ -69,7 +62,6 @@ def _dataset_info_from_dir(d: Path) -> DatasetInfo:
         index_complete=index_complete,
         entity_count=entity_count,
         relationship_count=relationship_count,
-        community_count=community_count,
     )
 
 

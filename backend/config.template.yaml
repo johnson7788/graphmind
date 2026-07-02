@@ -9,4 +9,9 @@ llm:
 
 embedding:
   model: "text-embedding-v3"        # Embedding 模型名称
+  dim: 1024                         # Embedding 向量维度（text-embedding-v3 为 1024）
   api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # Embedding API 端点（通常与 llm.api_base 相同）
+
+vision:
+  model: "qwen-vl-max"              # 视觉模型（VLM）名称，用于多模态解析与问答
+  api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # VLM API 端点（通常与 llm.api_base 相同）

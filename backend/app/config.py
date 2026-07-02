@@ -46,16 +46,22 @@ APP_CONFIG = _load_app_config()
 
 
 def get_llm_config() -> dict:
-    """Extract LLM configuration."""
+    """Extract LLM / embedding / vision model configuration."""
     cfg = APP_CONFIG.get("llm", {})
     emb = APP_CONFIG.get("embedding", {})
-    api_key = cfg.get("api_key", "") or os.environ.get("GRAPHRAG_API_KEY", "")
+    vis = APP_CONFIG.get("vision", {})
+    api_key = cfg.get("api_key", "") or os.environ.get("GRAPHRAG_API_KEY", "") \
+        or os.environ.get("LLM_API_KEY", "")
+    api_base = cfg.get("api_base", "https://api.openai.com/v1")
     return {
         "api_key": api_key,
         "model": cfg.get("model", "gpt-4o"),
-        "api_base": cfg.get("api_base", "https://api.openai.com/v1"),
+        "api_base": api_base,
         "emb_model": emb.get("model", "text-embedding-3-small"),
-        "emb_base": emb.get("api_base", cfg.get("api_base", "https://api.openai.com/v1")),
+        "emb_base": emb.get("api_base", api_base),
+        "emb_dim": int(emb.get("dim", 1024)),
+        "vision_model": vis.get("model", cfg.get("model", "gpt-4o")),
+        "vision_base": vis.get("api_base", api_base),
     }
 
 

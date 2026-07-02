@@ -36,19 +36,26 @@ export const searchEntities = (datasetId: string, query: string, limit = 20) =>
   api.get(`/datasets/${datasetId}/graph/search-entities`, { params: { q: query, limit } }).then(r => r.data);
 export const getEntityNeighborhood = (datasetId: string, entity: string, depth = 3) =>
   api.get(`/datasets/${datasetId}/graph/neighborhood`, { params: { entity, depth } }).then(r => r.data);
+// Build a URL for a graph node's image thumbnail (image entities).
+export const graphImageUrl = (datasetId: string, path: string) =>
+  `/api/datasets/${datasetId}/graph/image?path=${encodeURIComponent(path)}`;
 
 // Data Browser
 export const getEntities = (datasetId: string, page = 1, pageSize = 20) =>
   api.get(`/datasets/${datasetId}/entities`, { params: { page, page_size: pageSize } }).then(r => r.data);
 export const getRelationships = (datasetId: string, page = 1, pageSize = 20) =>
   api.get(`/datasets/${datasetId}/relationships`, { params: { page, page_size: pageSize } }).then(r => r.data);
-export const getCommunities = (datasetId: string) => api.get(`/datasets/${datasetId}/communities`).then(r => r.data);
-export const getCommunityDetail = (datasetId: string, communityId: number) =>
-  api.get(`/datasets/${datasetId}/communities/${communityId}`).then(r => r.data);
 
 // Search
-export const searchKnowledge = (datasetId: string, query: string, mode: string) =>
-  api.post(`/datasets/${datasetId}/search`, { query, mode }).then(r => r.data);
+export const searchKnowledge = (
+  datasetId: string,
+  query: string,
+  mode: string,
+  multimodalContent?: Array<Record<string, unknown>>,
+) =>
+  api.post(`/datasets/${datasetId}/search`, {
+    query, mode, multimodal_content: multimodalContent,
+  }).then(r => r.data);
 
 export interface SearchStreamCallbacks {
   onStatus: (status: string, message: string) => void;
@@ -62,6 +69,7 @@ export const searchKnowledgeStream = (
   query: string,
   mode: string,
   callbacks: SearchStreamCallbacks,
+  multimodalContent?: Array<Record<string, unknown>>,
 ): AbortController => {
   const controller = new AbortController();
 
@@ -70,7 +78,7 @@ export const searchKnowledgeStream = (
       const response = await fetch(`/api/datasets/${datasetId}/search/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, mode }),
+        body: JSON.stringify({ query, mode, multimodal_content: multimodalContent }),
         signal: controller.signal,
       });
 

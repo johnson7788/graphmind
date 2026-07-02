@@ -87,8 +87,6 @@ const STEP_MAP: Record<string, number> = {
   build: 3,
   building: 3,
   indexing: 3,
-  community_detection: 3,
-  'graphrag index': 3,
   done: 3,
   completed: 3,
 };
@@ -791,9 +789,6 @@ const DatasetManager: React.FC = () => {
                   </Tag>
                   <Tag style={{ borderRadius: 4, fontSize: 12 }}>
                     关系 {ds.relationship_count}
-                  </Tag>
-                  <Tag style={{ borderRadius: 4, fontSize: 12 }}>
-                    社区 {ds.community_count}
                   </Tag>
                 </Space>
 

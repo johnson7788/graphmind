@@ -9,7 +9,6 @@ interface Dataset {
   index_complete: boolean;
   entity_count: number;
   relationship_count: number;
-  community_count: number;
 }
 
 interface DatasetStore {
