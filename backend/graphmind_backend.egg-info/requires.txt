@@ -1,0 +1,9 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+sse-starlette>=2.0
+lightrag-hku[api]>=1.5.4
+raganything>=1.0.0
+mineru[core]>=2.0.0
+networkx>=3.0
+pyyaml>=6.0

@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: graphmind-backend
+Version: 1.0.0
+Summary: GraphMind Backend - FastAPI server (LightRAG + RAG-Anything)
+Requires-Python: <3.14,>=3.10
+Requires-Dist: fastapi>=0.115
+Requires-Dist: uvicorn[standard]>=0.30
+Requires-Dist: python-multipart>=0.0.9
+Requires-Dist: sse-starlette>=2.0
+Requires-Dist: lightrag-hku[api]>=1.5.4
+Requires-Dist: raganything>=1.0.0
+Requires-Dist: mineru[core]>=2.0.0
+Requires-Dist: networkx>=3.0
+Requires-Dist: pyyaml>=6.0

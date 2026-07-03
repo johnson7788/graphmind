@@ -10,6 +10,12 @@ import yaml
 
 log = logging.getLogger("graphrag-backend")
 
+# MinerU downloads its parsing models on first use. Default to ModelScope, which
+# is reachable from mainland China, since huggingface.co is often blocked. The
+# mineru subprocess inherits this from the backend process env. An explicit
+# MINERU_MODEL_SOURCE in the environment still takes precedence.
+os.environ.setdefault("MINERU_MODEL_SOURCE", "modelscope")
+
 # ── Paths ────────────────────────────────────────────────────────────────
 BACKEND_DIR = Path(__file__).resolve().parent.parent  # backend/
 PROJECT_ROOT = BACKEND_DIR.parent                     # demo_app/

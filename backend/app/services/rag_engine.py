@@ -127,10 +127,17 @@ def build_vision_model_func(llm: dict, llm_model_func: Callable) -> Callable:
 
 
 def build_embedding_func(llm: dict) -> EmbeddingFunc:
+    # ``openai_embed`` is itself an EmbeddingFunc pre-wrapped with a hardcoded
+    # embedding_dim of 1536. Wrapping it again in a partial hides that inner
+    # wrapper from EmbeddingFunc's auto-unwrap, so the inner 1536 dimension check
+    # would clash with our real dim (e.g. 1024 for text-embedding-v3). Bind the
+    # raw underlying coroutine (``openai_embed.func``) instead, and inject the
+    # configured dimension via send_dimensions so it is requested from the API.
     return EmbeddingFunc(
         embedding_dim=llm["emb_dim"],
+        send_dimensions=True,
         func=partial(
-            openai_embed,
+            openai_embed.func,
             model=llm["emb_model"],
             api_key=llm["api_key"],
             base_url=llm["emb_base"],
