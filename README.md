@@ -62,6 +62,7 @@ demo_app/
 ├── doc/                         # 设计文档与截图
 ├── test/                        # API 集成测试
 ├── start.sh                     # 一键启动脚本
+├── prepare.sh                   # 后端环境准备脚本（分步安装依赖 + 模型下载）
 ├── pyproject.toml
 └── README.md
 ```
@@ -85,15 +86,23 @@ demo_app/
 
 ### 环境要求
 
-- Python 3.11+ / [uv](https://docs.astral.sh/uv/)
+- Python 3.12+ / [uv](https://docs.astral.sh/uv/)
 - Node.js 18+ / npm
 
-### 1. 配置 LLM
+### 1. 准备后端环境
+
+```bash
+./prepare.sh                # 安装依赖 + 预下载 MinerU 模型（约几 GB）
+./prepare.sh --skip-models  # 仅安装依赖，首次构建图谱时再自动下载模型
+```
+
+> **为什么不用 `uv sync`：** raganything 钉了 `lightrag-hku<1.5`，与我们使用的 1.5.4 冲突。`prepare.sh` 通过分步 `uv pip install` + `--no-deps` 绕过。
+
+### 2. 配置 LLM
 
 ```bash
 cd backend
-cp config.template.yaml config.local.yaml
-# 编辑 config.local.yaml，填入你的 API Key 和模型配置
+# 编辑 config.local.yaml（prepare.sh 已从模板自动生成），填入你的 API Key
 ```
 
 ```yaml
@@ -110,7 +119,7 @@ embedding:
 
 支持所有兼容 OpenAI API 格式的服务（OpenAI、通义千问、DeepSeek 等）。
 
-### 2. 一键启动
+### 3. 一键启动
 
 ```bash
 ./start.sh
@@ -123,11 +132,11 @@ embedding:
 
 按 `Ctrl+C` 停止所有服务。
 
-### 3. 手动启动（可选）
+### 4. 手动启动（可选）
 
 ```bash
-# 终端 1 — 启动后端
-cd backend && uv sync && uv run uvicorn app.main:app --port 8777
+# 终端 1 — 启动后端（先确认已运行过 prepare.sh）
+cd backend && uv run uvicorn app.main:app --port 8777
 
 # 终端 2 — 启动前端
 cd frontend && npm install && npm run dev
