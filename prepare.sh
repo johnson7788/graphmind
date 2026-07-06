@@ -47,6 +47,10 @@ uv pip install "lightrag-hku[api]==1.5.4"
 
 echo "📦 [2/4] 安装 MinerU + ModelScope（体积较大，含 torch/transformers）..."
 uv pip install "mineru[core]==3.4.0" modelscope
+# 注意：pypdfium2 保持 mineru 依赖的 5.9.0（被 pdftext 硬钉，不能降级——
+# 降到 4.30.0 会让 pdftext 报 "'PageChars' object is not iterable"）。
+# 5.9.0 移除了 PdfImage.get_pos，会让 mineru 的 pdf_classify 打出 ERROR 行，
+# 但我们在 rag_engine 里用 parse_method="ocr" 跳过 classify，规避了该问题。
 
 echo "📦 [3/4] 安装 RAG-Anything（--no-deps 绕过过时的 lightrag<1.5 钉）..."
 uv pip install "raganything==1.3.1" --no-deps

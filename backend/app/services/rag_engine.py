@@ -155,7 +155,12 @@ def _make_config(dataset_id: str) -> RAGAnythingConfig:
     return RAGAnythingConfig(
         working_dir=str(rag_storage_dir(dataset_id)),
         parser="mineru",
-        parse_method="auto",
+        # 'auto' 会触发 mineru 的 pdf_classify，其内部调用 PdfImage.get_pos，
+        # 该方法在 pypdfium2 5.9.0（被 pdftext 硬钉）中已移除 → mineru 内部虽能
+        # 捕获并回退，但会在 stderr 打出 ERROR 行，raganything 的
+        # _run_mineru_command 见到任何含 "error" 的行即判定解析失败。
+        # 'ocr' 直接跳过 classify，多模态输出（图片/表格/公式）不受影响。
+        parse_method="ocr",
         parser_output_dir=str(parse_output_dir(dataset_id)),
         enable_image_processing=True,
         enable_table_processing=True,
@@ -228,9 +233,42 @@ async def get_rag(dataset_id: str) -> RAGAnything:
             raise RuntimeError(
                 f"RAGAnything 初始化失败: {(init or {}).get('error', 'unknown error')}"
             )
+        _patch_modal_processor_config(inst)
         _instances[dataset_id] = inst
         log.info("Initialized RAGAnything for dataset %s", dataset_id)
         return inst
+
+
+def _patch_modal_processor_config(inst: RAGAnything) -> None:
+    """Make RAG-Anything 1.3.1's multimodal path work against LightRAG 1.5+.
+
+    LightRAG 1.5 introduced runtime-only config keys — ``role_llm_funcs`` (the
+    per-role wrapped LLM callables) and ``llm_cache_identities`` — that it
+    injects via ``_build_global_config()`` rather than storing as dataclass
+    fields. RAG-Anything 1.3.1 predates this and builds its config two ways,
+    both of which drop those keys:
+
+    * multimodal *extraction* uses ``asdict(lightrag)`` (per processor) →
+      ``KeyError: 'role_llm_funcs'`` in ``extract_entities``;
+    * the cross-item *merge* passes ``lightrag.__dict__`` directly →
+      ``KeyError: 'role_llm_funcs'`` in ``merge_nodes_and_edges`` (summarize).
+
+    Without both, every image/table/equation item is dropped and
+    ``process_document_complete`` aborts. Fix by (1) handing each processor the
+    correctly-built config and (2) injecting the runtime keys into
+    ``lightrag.__dict__`` so the raw-dict merge path finds them too. (These are
+    properties on the class, so the dict entries coexist with normal attribute
+    access rather than shadowing it.)
+    """
+    lightrag = inst.lightrag
+    if not hasattr(lightrag, "_build_global_config"):
+        return
+    global_config = lightrag._build_global_config()
+    for proc in (inst.modal_processors or {}).values():
+        proc.global_config = global_config
+    for key in ("role_llm_funcs", "llm_cache_identities"):
+        if key in global_config:
+            lightrag.__dict__[key] = global_config[key]
 
 
 async def get_lightrag(dataset_id: str) -> LightRAG:
