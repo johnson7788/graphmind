@@ -240,25 +240,23 @@ async def get_rag(dataset_id: str) -> RAGAnything:
 
 
 def _patch_modal_processor_config(inst: RAGAnything) -> None:
-    """Make RAG-Anything 1.3.1's multimodal path work against LightRAG 1.5+.
+    """让 RAG-Anything 1.3.1 的多模态流程能在 LightRAG 1.5+ 上工作。
 
-    LightRAG 1.5 introduced runtime-only config keys — ``role_llm_funcs`` (the
-    per-role wrapped LLM callables) and ``llm_cache_identities`` — that it
-    injects via ``_build_global_config()`` rather than storing as dataclass
-    fields. RAG-Anything 1.3.1 predates this and builds its config two ways,
-    both of which drop those keys:
+    LightRAG 1.5 引入了两个仅运行时存在的配置键——``role_llm_funcs``（按角色
+    包装的 LLM 可调用对象）和 ``llm_cache_identities``——它们通过
+    ``_build_global_config()`` 注入，而非作为 dataclass 字段存储。RAG-Anything
+    1.3.1 早于此改动，其构建配置的两种方式都会丢掉这两个键：
 
-    * multimodal *extraction* uses ``asdict(lightrag)`` (per processor) →
-      ``KeyError: 'role_llm_funcs'`` in ``extract_entities``;
-    * the cross-item *merge* passes ``lightrag.__dict__`` directly →
-      ``KeyError: 'role_llm_funcs'`` in ``merge_nodes_and_edges`` (summarize).
+    * 多模态“抽取”使用 ``asdict(lightrag)``（每个 processor）→
+      ``extract_entities`` 报 ``KeyError: 'role_llm_funcs'``；
+    * 跨条目“合并”直接传入 ``lightrag.__dict__`` →
+      ``merge_nodes_and_edges``（摘要）报 ``KeyError: 'role_llm_funcs'``。
 
-    Without both, every image/table/equation item is dropped and
-    ``process_document_complete`` aborts. Fix by (1) handing each processor the
-    correctly-built config and (2) injecting the runtime keys into
-    ``lightrag.__dict__`` so the raw-dict merge path finds them too. (These are
-    properties on the class, so the dict entries coexist with normal attribute
-    access rather than shadowing it.)
+    缺少任一个，每个 image/table/equation 条目都会被丢弃，
+    ``process_document_complete`` 中止。修复方式：(1) 给每个 processor 传入
+    正确构建的配置；(2) 把这两个运行时键注入 ``lightrag.__dict__``，使原始
+    dict 的合并路径也能找到它们。（它们是类上的 property，所以 dict 条目与正常
+    属性访问共存，而不会遮蔽属性。）
     """
     lightrag = inst.lightrag
     if not hasattr(lightrag, "_build_global_config"):

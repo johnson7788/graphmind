@@ -293,7 +293,9 @@ export default function GraphView() {
 
     graphData.nodes.forEach((n) => {
       const isRoot = exploringEntity != null && n.id === exploringEntity;
-      const isImage = n.type.toLowerCase() === 'image' && !!n.image;
+      // 任何解析到截图的多模态节点（image/table/chart/…）都渲染为图片缩略图，
+      // 而不是普通圆形节点。
+      const isImage = !!n.image;
       graph.addNode(n.id, {
         label: n.label,
         // Random initial placement; forceAtlas2 spreads them out.

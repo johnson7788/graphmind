@@ -249,6 +249,10 @@ async def _run_index_async(dataset_id: str, entity_types: list[str]) -> None:
                     message="RAG 引擎初始化失败",
                     error=(init or {}).get("error", "unknown error"))
         return
+    # 该索引路径自行构建实例，而非走 get_rag()，因此必须同样应用
+    # RAG-Anything↔LightRAG 1.5 的配置补丁——否则多模态（image/table/equation）
+    # 条目会因 'role_llm_funcs' KeyError 被丢弃，永远无法成为图谱节点。
+    rag_engine._patch_modal_processor_config(inst)
 
     callback = _ProgressCallback(dataset_id, total=len(files))
     inst.callback_manager.register(callback)

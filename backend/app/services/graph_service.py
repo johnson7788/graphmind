@@ -8,6 +8,7 @@ dataset-relative thumbnail path extracted from their source chunk.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from pathlib import Path
@@ -22,13 +23,18 @@ from app.models.schemas import (
     GraphStats,
     PaginatedResponse,
 )
-from app.services.rag_engine import dataset_root, get_lightrag
+from app.services.rag_engine import dataset_root, get_lightrag, parse_output_dir
 
 log = logging.getLogger("graphrag-backend")
 
 _GRAPH_FIELD_SEP = "<SEP>"
 _IMAGE_PATH_RE = re.compile(r"Image Path:\s*([^\r\n]+)")
 _MAX_GRAPH_NODES = 100_000
+
+# 需要携带可解析截图的多模态实体类型。
+# image/table 的 chunk 内嵌了 "Image Path:"；chart/equation 的 chunk 没有，
+# 因此后两者的截图从 MinerU 的 content_list.json 中解析。
+_MULTIMODAL_TYPES = {"image", "table", "chart", "equation"}
 
 # ── Color palette by entity type ─────────────────────────────────────────
 TYPE_COLORS = {
@@ -40,9 +46,10 @@ TYPE_COLORS = {
     "concept": "#A29BFE",
     "category": "#A29BFE",
     "technology": "#7BED9F",
-    # Multimodal entity types produced by RAG-Anything
+    # RAG-Anything 产生的多模态实体类型
     "image": "#E056A0",
     "table": "#F78FB3",
+    "chart": "#FF9FF3",
     "equation": "#FDA7DF",
     "OTHER": "#636E72",
 }
@@ -59,9 +66,15 @@ def _ensure_dataset(dataset_id: str) -> None:
 
 
 def _node_type(node) -> str:
+    # LightRAG 1.5 的 KnowledgeGraphNode.labels[0] 是实体“名称”而非类型；
+    # 真正的类型在 properties["entity_type"]。优先取它，才能正确识别多模态
+    # 类型（image/table/…）、正确着色/过滤，并让详情面板显示类型而非名称。
+    etype = node.properties.get("entity_type")
+    if etype:
+        return str(etype)
     if node.labels:
         return str(node.labels[0])
-    return str(node.properties.get("entity_type", "OTHER"))
+    return "OTHER"
 
 
 def _normalize_image(dataset_id: str, raw_path: str) -> str | None:
@@ -87,13 +100,14 @@ async def _build_graph_data(
         node_label=node_label, max_depth=max_depth, max_nodes=max_nodes
     )
 
-    # Degree for node sizing
+    # 按度数决定节点大小
     degree: dict[str, int] = {}
     for e in kg.edges:
         degree[e.source] = degree.get(e.source, 0) + 1
         degree[e.target] = degree.get(e.target, 0) + 1
 
     type_filter = {t.lower() for t in types} if types else None
+    content_lists = _load_content_lists(dataset_id)
 
     nodes: list[GraphNode] = []
     visible: set[str] = set()
@@ -104,8 +118,8 @@ async def _build_graph_data(
         conn = degree.get(n.id, 0)
         size = min(10.0 + conn * 3.0, 50.0)
         image = None
-        if etype.lower() == "image":
-            raw = await _resolve_image_chunk_path(lightrag, n)
+        if etype.lower() in _MULTIMODAL_TYPES:
+            raw = await _resolve_image_chunk_path(lightrag, n, content_lists)
             if raw:
                 image = _normalize_image(dataset_id, raw)
         nodes.append(GraphNode(
@@ -137,7 +151,42 @@ async def _build_graph_data(
     return GraphData(nodes=nodes, edges=edges)
 
 
-async def _resolve_image_chunk_path(lightrag, node) -> str | None:
+def _load_content_lists(
+    dataset_id: str,
+) -> dict[str, dict[tuple[str, int], list[str]]]:
+    """索引每个文档的 MinerU ``content_list.json`` 截图。
+
+    返回 ``{文档名: {(条目类型, 页码): [绝对图片路径, ...]}}``。chart（及
+    equation）实体的 chunk 不含内嵌的 ``Image Path:``，其截图仅存在于此，
+    按 MinerU 的条目类型与页码索引。json 中的 img_path 相对于该 json 所在目录，
+    因此解析为绝对路径，再交由 ``_normalize_image`` 校验。
+    """
+    result: dict[str, dict[tuple[str, int], list[str]]] = {}
+    out_dir = parse_output_dir(dataset_id)
+    if not out_dir.is_dir():
+        return result
+    suffix = "_content_list.json"
+    for cl in out_dir.rglob(f"*{suffix}"):
+        stem = cl.name[: -len(suffix)]
+        try:
+            items = json.loads(cl.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        index: dict[tuple[str, int], list[str]] = {}
+        for item in items if isinstance(items, list) else []:
+            img = item.get("img_path")
+            if not img:
+                continue
+            itype = str(item.get("type", "")).lower()
+            page = int(item.get("page_idx", 0) or 0)
+            index.setdefault((itype, page), []).append(str((cl.parent / img).resolve()))
+        result[stem] = index
+    return result
+
+
+async def _resolve_image_chunk_path(
+    lightrag, node, content_lists: dict[str, dict[tuple[str, int], list[str]]]
+) -> str | None:
     source_id = node.properties.get("source_id")
     if not source_id:
         return None
@@ -146,9 +195,21 @@ async def _resolve_image_chunk_path(lightrag, node) -> str | None:
         chunk = await lightrag.text_chunks.get_by_id(chunk_id)
     except Exception:
         return None
-    content = (chunk or {}).get("content", "") if isinstance(chunk, dict) else ""
-    m = _IMAGE_PATH_RE.search(content)
-    return m.group(1).strip() if m else None
+    if not isinstance(chunk, dict):
+        return None
+    m = _IMAGE_PATH_RE.search(chunk.get("content", ""))
+    if m:
+        return m.group(1).strip()
+    # chart/equation 的 chunk 不含内嵌路径——用 chunk 的 MinerU 条目类型 +
+    # 页码去 content_list 索引中匹配。匹配后 pop 出该路径，使同一页多个同类型
+    # 条目能分别取到不同的图片。
+    itype = str(chunk.get("original_type", "")).lower()
+    page = chunk.get("page_idx")
+    if not itype or page is None:
+        return None
+    stem = Path(str(chunk.get("file_path", ""))).stem
+    paths = (content_lists.get(stem) or {}).get((itype, int(page)))
+    return paths.pop(0) if paths else None
 
 
 # ── Public API ────────────────────────────────────────────────────────────
