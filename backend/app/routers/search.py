@@ -26,6 +26,17 @@ async def search(dataset_id: str, body: SearchRequest):
     )
 
 
+@router.post("/{dataset_id}/search/context")
+async def search_context(dataset_id: str, body: SearchRequest):
+    """Retrieval-only: return the matched context without generating an answer.
+
+    Same modes as /search (naive|local|global|hybrid|mix). No LLM answer step.
+    """
+    return await search_service.retrieve_context(
+        dataset_id=dataset_id, query=body.query, mode=body.mode
+    )
+
+
 @router.post("/{dataset_id}/search/stream")
 async def search_stream(dataset_id: str, body: SearchRequest):
     """Run a knowledge-graph search query with SSE streaming.

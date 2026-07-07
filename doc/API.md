@@ -31,8 +31,11 @@
 | GET | `/api/datasets/{dataset_id}/graph/image` | 多模态实体截图 |
 | GET | `/api/datasets/{dataset_id}/entities` | 实体分页列表 |
 | GET | `/api/datasets/{dataset_id}/relationships` | 关系分页列表 |
+| GET | `/api/datasets/{dataset_id}/entity` | 单个实体精确查询 |
+| GET | `/api/datasets/{dataset_id}/relationship` | 单条关系精确查询 |
 | POST | `/api/datasets/{dataset_id}/search` | 智能问答（非流式） |
 | POST | `/api/datasets/{dataset_id}/search/stream` | 智能问答（SSE 流式） |
+| POST | `/api/datasets/{dataset_id}/search/context` | 纯检索（不生成答案） |
 
 ---
 
@@ -319,6 +322,45 @@
 }
 ```
 
+### GET `/api/datasets/{dataset_id}/entity`
+按名称精确查询单个实体（图节点属性 + 邻接实体名）。
+
+**查询参数**：`name`（实体名称，必填）。找不到返回 `404`。
+
+**响应**
+```json
+{
+  "name": "示例产品®",
+  "properties": {
+    "entity_id": "示例产品®",
+    "entity_type": "artifact",
+    "description": "……",
+    "source_id": "chunk-xxx",
+    "file_path": "示例文档.pdf"
+  },
+  "neighbors": [ "正式准入医院", "135#" ]
+}
+```
+
+### GET `/api/datasets/{dataset_id}/relationship`
+按源/目标实体精确查询单条关系。
+
+**查询参数**：`source`、`target`（均必填）。找不到返回 `404`。
+
+**响应**
+```json
+{
+  "source": "135#",
+  "target": "正式准入医院",
+  "properties": {
+    "description": "……",
+    "keywords": "……",
+    "weight": 1.0,
+    "source_id": "chunk-xxx"
+  }
+}
+```
+
 ---
 
 ## 智能问答 Search
@@ -356,6 +398,24 @@
   "mode": "mix",
   "answer": "……",
   "context": null
+}
+```
+
+### POST `/api/datasets/{dataset_id}/search/context`
+纯检索，只返回命中的上下文（实体/关系/文本块），不调用 LLM 生成答案。`mode` 同上表。
+
+**请求体**
+```json
+{ "query": "示例产品的市场策略是什么？", "mode": "mix" }
+```
+> `multimodal_content` 在此接口忽略。
+
+**响应**
+```json
+{
+  "query": "示例产品的市场策略是什么？",
+  "mode": "mix",
+  "context": "-----Entities-----\n……\n-----Relationships-----\n……\n-----Sources-----\n……"
 }
 ```
 

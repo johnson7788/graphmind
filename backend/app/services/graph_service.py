@@ -328,6 +328,32 @@ async def get_relationships(dataset_id: str, page: int = 1, page_size: int = 20)
     )
 
 
+async def get_entity_detail(dataset_id: str, name: str) -> dict:
+    """Precise entity lookup: node properties + neighbor entity names."""
+    _ensure_dataset(dataset_id)
+    lightrag = await get_lightrag(dataset_id)
+    info = await lightrag.get_entity_info(name)
+    props = info.get("graph_data")
+    if not props:
+        raise HTTPException(status_code=404, detail=f"Entity '{name}' not found")
+    edges = await lightrag.chunk_entity_relation_graph.get_node_edges(name) or []
+    neighbors = [t for s, t in edges]
+    return {"name": name, "properties": props, "neighbors": neighbors}
+
+
+async def get_relation_detail(dataset_id: str, source: str, target: str) -> dict:
+    """Precise relationship lookup between two entities."""
+    _ensure_dataset(dataset_id)
+    lightrag = await get_lightrag(dataset_id)
+    info = await lightrag.get_relation_info(source, target)
+    props = info.get("graph_data")
+    if not props:
+        raise HTTPException(
+            status_code=404, detail=f"Relationship '{source}' -> '{target}' not found"
+        )
+    return {"source": source, "target": target, "properties": props}
+
+
 def resolve_image_file(dataset_id: str, rel_path: str) -> Path:
     """Validate and resolve a dataset-relative image path to an absolute file.
 

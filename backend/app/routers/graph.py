@@ -48,6 +48,25 @@ async def get_entity_neighborhood(
     return await graph_service.get_entity_neighborhood(dataset_id, entity, depth=depth)
 
 
+@router.get("/{dataset_id}/entity")
+async def get_entity_detail(
+    dataset_id: str,
+    name: str = Query(..., description="Exact entity name"),
+):
+    """Precise entity lookup: properties + neighbor entity names."""
+    return await graph_service.get_entity_detail(dataset_id, name)
+
+
+@router.get("/{dataset_id}/relationship")
+async def get_relationship_detail(
+    dataset_id: str,
+    source: str = Query(..., description="Source entity name"),
+    target: str = Query(..., description="Target entity name"),
+):
+    """Precise relationship lookup between two entities."""
+    return await graph_service.get_relation_detail(dataset_id, source, target)
+
+
 @router.get("/{dataset_id}/graph/image")
 def get_graph_image(
     dataset_id: str,

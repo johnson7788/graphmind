@@ -108,6 +108,20 @@ async def search_stream(
         yield _sse_event("error", {"message": f"**搜索出错:** {e}"})
 
 
+# ── Retrieval only (no answer generation) ────────────────────────────────
+async def retrieve_context(dataset_id: str, query: str, mode: str = "mix") -> dict:
+    """Return the retrieved context (entities/relations/chunks) without LLM answer."""
+    _ensure_dataset(dataset_id)
+    mode = _norm_mode(mode)
+    if mode not in _VALID_MODES:
+        raise HTTPException(status_code=400, detail=f"Invalid search mode: {mode}")
+    rag = await get_rag(dataset_id)
+    context = await rag.lightrag.aquery(
+        query, param=QueryParam(mode=mode, only_need_context=True)
+    )
+    return {"query": query, "mode": mode, "context": str(context)}
+
+
 # ── Non-streaming search ─────────────────────────────────────────────────
 async def search(
     dataset_id: str,
