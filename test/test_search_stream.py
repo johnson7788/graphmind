@@ -10,12 +10,12 @@
 from __future__ import annotations
 
 import json
-import os
 
 import pytest
 import requests
 
-BASE = os.environ.get("GRAPHARG_API_BASE", "http://localhost:8777/api")
+from conftest import BASE
+
 SEARCH_TIMEOUT = 180  # search may take up to 3 minutes
 
 
@@ -89,29 +89,7 @@ def stream_search(dataset_id: str, query: str, mode: str, **kwargs):
     )
 
 
-# ── Fixtures ──────────────────────────────────────────────────────────────
-
-
-@pytest.fixture(scope="session")
-def api():
-    """Verify backend is reachable."""
-    try:
-        r = requests.get(f"{BASE}/health", timeout=5)
-        r.raise_for_status()
-    except requests.ConnectionError:
-        pytest.skip(f"Backend not reachable at {BASE}")
-    return BASE
-
-
-@pytest.fixture(scope="module")
-def indexed_dataset(api):
-    """Find an indexed dataset for search tests."""
-    r = requests.get(f"{api}/datasets")
-    datasets = r.json().get("datasets", [])
-    for ds in datasets:
-        if ds.get("has_index") or ds.get("entity_count", 0) > 0:
-            return ds["id"]
-    pytest.skip("No indexed dataset available for search stream tests")
+# fixtures（api / indexed_dataset）来自 conftest.py
 
 
 # ══════════════════════════════════════════════════════════════════════════
