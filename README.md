@@ -115,6 +115,9 @@ llm:
 embedding:
   model: "text-embedding-v3"
   api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+rag:
+  language: "简体中文"   # 实体/关系抽取的输出语言；不设置时 LightRAG 默认英文
 ```
 
 支持所有兼容 OpenAI API 格式的服务（OpenAI、通义千问、DeepSeek 等）。

@@ -15,3 +15,8 @@ embedding:
 vision:
   model: "qwen-vl-max"              # 视觉模型（VLM）名称，用于多模态解析与问答
   api_base: "https://dashscope.aliyuncs.com/compatible-mode/v1"  # VLM API 端点（通常与 llm.api_base 相同）
+
+rag:
+  # 实体/关系抽取与摘要的输出语言（传给 LightRAG 的 addon_params.language）。
+  # 不设置时 LightRAG 默认用英文抽取。填 "Simplified Chinese" 得到中文描述。
+  language: "简体中文"
