@@ -1,10 +1,12 @@
-"""文档上传/列表/删除接口测试，以及编码转换单元测试。
+"""文档上传/列表/删除接口测试。
 
 覆盖:
     POST   /api/datasets/{id}/documents
     GET    /api/datasets/{id}/documents
     DELETE /api/datasets/{id}/documents/{filename}
-    单元测试: document_service._decode_to_utf8
+
+注: 迁移到 LightRAG + RAG-Anything 后，文件按原样保存（不再做编码转换/文本抽取），
+    故 extracted_chars 恒为 0，文件名也保持原样（大小写不归一化）。
 """
 
 from __future__ import annotations
@@ -32,38 +34,34 @@ class TestDocuments:
         assert r.json()["uploaded"] == 1
 
     def test_upload_gbk_txt(self, api, dataset, sample_gbk):
-        """GBK 编码文件上传后应转换为 UTF-8。"""
+        """GBK 编码文件应能正常上传（内容按原样保存，不做转换）。"""
         with open(sample_gbk, "rb") as f:
             r = requests.post(
                 f"{api}/datasets/{dataset}/documents",
                 files={"files": ("gbk_file.txt", f, "text/plain")},
             )
         assert r.status_code == 200
-        data = r.json()
-        assert data["uploaded"] == 1
-        assert data["documents"][0]["extracted_chars"] > 0
+        assert r.json()["uploaded"] == 1
 
     def test_upload_utf16_txt(self, api, dataset, sample_utf16):
-        """UTF-16 编码文件上传后应转换为 UTF-8。"""
+        """UTF-16 编码文件应能正常上传（内容按原样保存，不做转换）。"""
         with open(sample_utf16, "rb") as f:
             r = requests.post(
                 f"{api}/datasets/{dataset}/documents",
                 files={"files": ("utf16_file.txt", f, "text/plain")},
             )
         assert r.status_code == 200
-        data = r.json()
-        assert data["uploaded"] == 1
-        assert data["documents"][0]["extracted_chars"] > 0
+        assert r.json()["uploaded"] == 1
 
     def test_upload_uppercase_extension(self, api, dataset, sample_txt):
-        """.TXT 扩展名应被归一化为 .txt。"""
+        """大写扩展名 .TXT 应被接受（校验时忽略大小写），文件名按原样保存。"""
         with open(sample_txt, "rb") as f:
             r = requests.post(
                 f"{api}/datasets/{dataset}/documents",
                 files={"files": ("test_file.TXT", f, "text/plain")},
             )
         assert r.status_code == 200
-        assert r.json()["documents"][0]["name"] == "test_file.txt"
+        assert r.json()["documents"][0]["name"] == "test_file.TXT"
 
     def test_upload_unsupported_type(self, api, dataset, tmp_path):
         """不支持的文件类型应被拒绝（400）。"""
@@ -97,27 +95,3 @@ class TestDocuments:
 
         r = requests.get(f"{api}/datasets/{dataset}/documents")
         assert len(r.json()["documents"]) == 0
-
-
-class TestEncoding:
-    """直接测试 _decode_to_utf8 辅助函数（不依赖后端）。"""
-
-    def test_utf8(self):
-        from app.services.document_service import _decode_to_utf8
-        assert _decode_to_utf8("你好世界".encode("utf-8"), "test.txt") == "你好世界"
-
-    def test_utf8_bom(self):
-        from app.services.document_service import _decode_to_utf8
-        assert _decode_to_utf8("你好世界".encode("utf-8-sig"), "test.txt") == "你好世界"
-
-    def test_utf16_le(self):
-        from app.services.document_service import _decode_to_utf8
-        assert "你好世界" in _decode_to_utf8("你好世界".encode("utf-16"), "test.txt")
-
-    def test_gbk(self):
-        from app.services.document_service import _decode_to_utf8
-        assert _decode_to_utf8("你好世界".encode("gbk"), "test.txt") == "你好世界"
-
-    def test_gb2312(self):
-        from app.services.document_service import _decode_to_utf8
-        assert _decode_to_utf8("人工智能".encode("gb2312"), "test.txt") == "人工智能"

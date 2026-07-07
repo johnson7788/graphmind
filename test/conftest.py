@@ -28,6 +28,16 @@ def pytest_configure(config):
     )
 
 
+def pytest_collection_modifyitems(config, items):
+    """默认跳过 e2e 用例；只有显式 `-m e2e` 时才运行。"""
+    if config.getoption("-m") == "e2e":
+        return
+    skip_e2e = pytest.mark.skip(reason="端到端测试默认跳过，用 -m e2e 运行")
+    for item in items:
+        if "e2e" in item.keywords:
+            item.add_marker(skip_e2e)
+
+
 @pytest.fixture(scope="session")
 def api() -> str:
     """确认后端可达；不可达则跳过所有依赖它的测试。"""

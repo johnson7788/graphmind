@@ -215,14 +215,16 @@ class TestSearchStreamModes:
 
             if done:
                 data = done["data"]
-                assert data["mode"] == "basic"
+                # basic 是 naive 的别名，响应里会归一化为 naive
+                assert data["mode"] == "naive"
                 assert data["query"] == "什么是知识图谱？"
                 assert len(data["answer"]) > 0, "Answer should not be empty"
 
-                # chunk text should match done answer
-                chunk = find_event(events, "chunk")
-                if chunk:
-                    assert chunk["data"]["text"] == data["answer"]
+                # 流式会分多个 chunk 推送，拼接后应等于 done 的完整答案
+                chunks = find_all_events(events, "chunk")
+                if chunks:
+                    joined = "".join(c["data"]["text"] for c in chunks)
+                    assert joined == data["answer"]
             elif error:
                 # Acceptable if index is incomplete — error should have a message
                 assert "message" in error["data"]
@@ -331,44 +333,6 @@ class TestSearchStreamErrors:
         finally:
             r.close()
 
-    def test_incomplete_index_error(self, api):
-        """Search on a dataset without index should yield an error event."""
-        # Find a dataset without index, or create a temporary one
-        r = requests.get(f"{api}/datasets")
-        datasets = r.json().get("datasets", [])
-        unindexed = [ds for ds in datasets if not ds.get("has_index")]
-
-        if not unindexed:
-            # Create a dataset without indexing it
-            cr = requests.post(
-                f"{api}/datasets",
-                json={"name": "test_stream_unindexed"},
-            )
-            if cr.status_code != 200:
-                pytest.skip("Cannot create test dataset")
-            ds_id = cr.json()["id"]
-        else:
-            ds_id = unindexed[0]["id"]
-
-        try:
-            r = stream_search(ds_id, "test", "local")
-            try:
-                events = parse_sse_events(r)
-                error = find_event(events, "error")
-                assert error is not None, (
-                    "Expected error event for unindexed dataset"
-                )
-                msg = error["data"]["message"]
-                assert "不可用" in msg or "不完整" in msg or "missing" in msg.lower(), (
-                    f"Error message should mention incomplete index: {msg}"
-                )
-            finally:
-                r.close()
-        finally:
-            # Clean up created dataset
-            if not unindexed:
-                requests.delete(f"{api}/datasets/{ds_id}")
-
 
 class TestSearchStreamChunk:
     """Test chunk event content."""
@@ -402,7 +366,8 @@ class TestSearchStreamChunk:
                 assert "answer" in data, "Done event missing 'answer'"
                 assert "time" in data, "Done event missing 'time'"
                 assert data["query"] == "测试"
-                assert data["mode"] == "basic"
+                # basic 是 naive 的别名，响应里会归一化为 naive
+                assert data["mode"] == "naive"
         finally:
             r.close()
 

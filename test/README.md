@@ -22,7 +22,7 @@ uv run python -m pytest ../test -m e2e -v    # 运行端到端测试（会真实
 | `conftest.py` | 共享 fixtures（`api` 连通性、`indexed_dataset` 复用已索引数据集、`sample_txt/gbk/utf16` 样本文件）与 `e2e` 标记注册 | —（无测试） |
 | `test_health_config.py` | 健康检查与配置状态 | `GET /health`、`GET /config/status` |
 | `test_datasets.py` | 数据集增删查 | `GET/POST /datasets`、`GET/DELETE /datasets/{id}` |
-| `test_documents.py` | 文档上传/列表/删除（含 GBK/UTF-16/大写扩展名/非法类型），以及 `_decode_to_utf8` 编码转换**单元测试**（不依赖后端） | `POST/GET /datasets/{id}/documents`、`DELETE /datasets/{id}/documents/{filename}` |
+| `test_documents.py` | 文档上传/列表/删除（含 GBK/UTF-16/大写扩展名/非法类型）。文件按原样保存，不再做编码转换或文本抽取 | `POST/GET /datasets/{id}/documents`、`DELETE /datasets/{id}/documents/{filename}` |
 | `test_indexing.py` | 索引启动与状态轮询；`TestIndexingE2E` 为创建→上传→索引→查询的端到端链路（`@pytest.mark.e2e`，默认跳过） | `POST /datasets/{id}/index`、`GET /datasets/{id}/index/status` |
 | `test_graph.py` | 图谱数据（limit/类型过滤）、统计、实体分页、关系分页、404 处理 | `GET /datasets/{id}/graph`、`/graph/stats`、`/entities`、`/relationships` |
 | `test_search.py` | 非流式问答（basic/local/global/mix 模式、非法 mode 422、404） | `POST /datasets/{id}/search` |
@@ -43,4 +43,6 @@ uv run python -m pytest ../test -m e2e -v    # 运行端到端测试（会真实
 
 - 迁移到 LightRAG + RAG-Anything 后，原 GraphRAG 的**社区（community）**相关接口已删除，对应测试也已移除。
 - 实体分页项字段为 `title/type/description`；关系分页项为 `source/target/description/weight`。
-- 搜索 `mode` 校验由 Pydantic pattern 完成，非法值返回 **422**（非 400）。`basic` 是 `naive` 的别名。
+- 搜索 `mode` 校验由 Pydantic pattern 完成，非法值返回 **422**（非 400）。`basic` 是 `naive` 的别名，**响应里会归一化为 `naive`**。
+- 文档上传按原样保存（不做编码转换/文本抽取），故 `extracted_chars` 恒为 0、文件名大小写保持原样。原 `_decode_to_utf8` 单元测试已随该功能移除。
+- 流式问答会分多个 `chunk` 推送，拼接后等于 `done` 的完整答案；单个 `chunk` 不等于完整答案。

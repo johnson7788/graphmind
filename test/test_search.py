@@ -30,7 +30,7 @@ class TestSearch:
         assert r.status_code == 404
 
     def test_search_basic_mode(self, api, indexed_dataset):
-        """基础 RAG（basic 为 naive 的别名）应返回非空答案。"""
+        """基础 RAG：basic 是 naive 的别名，响应里会归一化为 naive。"""
         r = requests.post(
             f"{api}/datasets/{indexed_dataset}/search",
             json={"query": "什么是知识图谱？", "mode": "basic"},
@@ -38,7 +38,7 @@ class TestSearch:
         )
         assert r.status_code == 200
         data = r.json()
-        assert data["mode"] == "basic"
+        assert data["mode"] == "naive"
         assert len(data["answer"]) > 0
 
     def test_search_local_mode(self, api, indexed_dataset):
