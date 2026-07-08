@@ -24,19 +24,20 @@ curl -s http://localhost:8777/api/datasets | jq '.datasets[] | {id, name, entity
 
 | 用户想要 | 接口 |
 |----------|------|
-| 问一个问题、要一段回答 | 智能问答 `/search` |
-| 只要检索到的原始上下文（实体/关系/文本块），不要 LLM 生成的答案 | 纯检索 `/search/context` |
+| 检索相关上下文（实体/关系/文本块）用于回答问题 | 纯检索 `/search/context` |
 | 查某个具体实体的详情和邻居 | 精确实体 `/entity` |
 | 查两个实体之间的关系 | 精确关系 `/relationship` |
 | 不知道实体全名，模糊找 | 模糊搜实体 `/graph/search-entities` |
 | 看某实体周围的子图 | 邻域 `/graph/neighborhood` |
 
-### 智能问答（会生成答案）
+### 纯检索（拿上下文，自己回答）
+
+检索命中的实体/关系/来源，你据此组织答案给用户。
 
 ```bash
-curl -s -X POST http://localhost:8777/api/datasets/$DS/search \
+curl -s -X POST http://localhost:8777/api/datasets/$DS/search/context \
   -H 'Content-Type: application/json' \
-  -d '{"query":"示例产品的市场策略是什么？","mode":"mix"}' | jq -r .answer
+  -d '{"query":"示例产品的市场策略","mode":"mix"}' | jq -r .context
 ```
 
 `mode` 决定检索方式，默认 `mix` 最全面。按问题类型选：
@@ -48,16 +49,6 @@ curl -s -X POST http://localhost:8777/api/datasets/$DS/search \
 | `global` | 宏观、概括性问题（以关系/主题为中心） |
 | `hybrid` | 兼顾细节与全局（local+global，均在图谱内） |
 | `naive` | 只要原始文本片段、不用图谱（纯向量 RAG） |
-
-### 纯检索（不生成答案，拿上下文）
-
-适合你想自己看命中的实体/关系/来源，或把上下文喂给别的流程。`mode` 同上。
-
-```bash
-curl -s -X POST http://localhost:8777/api/datasets/$DS/search/context \
-  -H 'Content-Type: application/json' \
-  -d '{"query":"示例产品的市场策略","mode":"mix"}' | jq -r .context
-```
 
 ### 精确查实体（需要实体全名）
 
@@ -93,7 +84,7 @@ curl -s -G http://localhost:8777/api/datasets/$DS/graph/neighborhood \
 
 用户问“X 和 Y 有什么关系”但不确定全名：先 `search-entities` 找到 X、Y 的准确名，再 `/relationship` 查，或用 `/entity` 看各自邻居。
 
-用户问开放性问题：直接 `/search`（`mix`），把 `.answer` 给用户。要溯源就再跑一次 `/search/context` 展示命中的实体/来源。
+用户问开放性问题：用 `/search/context`（`mix`）取上下文，你据此组织答案，需要时展示命中的实体/来源溯源。
 
 ## 排错
 
