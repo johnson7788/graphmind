@@ -64,6 +64,7 @@ demo_app/
 ├── start.sh                     # 一键启动脚本
 ├── prepare.sh                   # 后端环境准备脚本（分步安装依赖 + 模型下载）
 ├── pyproject.toml
+├── skills                       #封装成skill，方便使用
 └── README.md
 ```
 
