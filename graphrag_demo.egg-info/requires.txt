@@ -1,0 +1,8 @@
+streamlit>=1.40.0
+graphrag>=2.0.0
+pyvis>=0.3.0
+pandas>=2.0.0
+pyarrow>=14.0.0
+pyyaml>=6.0
+python-docx>=1.0
+PyPDF2>=3.0

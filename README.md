@@ -202,6 +202,10 @@ cd backend && uv run pytest
 cd test && bash api_test.sh
 ```
 
+## 如有任何问题，请联系我
+![weichat.png](doc/weichat.png)
+
 ## License
 
 MIT
+

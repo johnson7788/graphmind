@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: graphrag-demo
+Version: 1.0.0
+Summary: GraphRAG Demo: upload files, build knowledge graph, visualize and query
+Requires-Python: <3.14,>=3.11
+Requires-Dist: streamlit>=1.40.0
+Requires-Dist: graphrag>=2.0.0
+Requires-Dist: pyvis>=0.3.0
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: pyarrow>=14.0.0
+Requires-Dist: pyyaml>=6.0
+Requires-Dist: python-docx>=1.0
+Requires-Dist: PyPDF2>=3.0
